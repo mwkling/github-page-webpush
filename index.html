@@ -23,11 +23,14 @@
 
   <section id="config-warning" class="warn" hidden>
     <strong>No App ID configured.</strong> Edit <code>config.js</code> or append <code>?appId=&lt;your-app-id&gt;</code> to the URL.
+    Use <code>?env=staging</code> or <code>?env=production</code> to pick the OneSignal environment.
   </section>
 
   <section>
     <h2>State</h2>
     <dl>
+      <dt>Environment</dt><dd id="env">-</dd>
+      <dt>API origin</dt><dd id="api-origin">-</dd>
       <dt>App ID</dt><dd id="app-id">-</dd>
       <dt>Permission</dt><dd id="permission">-</dd>
       <dt>Opted in</dt><dd id="opted-in">-</dd>
@@ -64,7 +67,6 @@
   </section>
 
   <script src="config.js"></script>
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const log = (...args) => {
@@ -76,10 +78,24 @@
     };
 
     const params = new URLSearchParams(location.search);
+    const envName = params.get("env") || window.ONESIGNAL_ENV;
+    const env = window.ONESIGNAL_ENVS[envName];
+    if (!env) {
+      log(`Unknown environment "${envName}"; expected one of ${Object.keys(window.ONESIGNAL_ENVS).join(", ")}`);
+    }
     const appId = params.get("appId") || window.ONESIGNAL_APP_ID;
-    const configured = appId && !appId.startsWith("REPLACE_");
-    $("app-id").textContent = configured ? appId : "(not set)";
+    const configured = !!env && appId && !appId.startsWith("REPLACE_");
+    $("env").textContent = envName;
+    $("api-origin").textContent = env ? env.apiOrigin : "-";
+    $("app-id").textContent = appId && !appId.startsWith("REPLACE_") ? appId : "(not set)";
     $("config-warning").hidden = !!configured;
+
+    if (env) {
+      const sdk = document.createElement("script");
+      sdk.src = env.pageSdk;
+      sdk.defer = true;
+      document.head.appendChild(sdk);
+    }
 
     function refresh() {
       const os = window.OneSignal;
@@ -94,11 +110,11 @@
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     if (configured) {
       OneSignalDeferred.push(async (OneSignal) => {
-        log("Initializing OneSignal", { appId, scope: window.ONESIGNAL_SW_SCOPE });
+        log("Initializing OneSignal", { env: envName, appId, scope: window.ONESIGNAL_SW_SCOPE, worker: env.serviceWorkerPath });
         await OneSignal.init({
           appId,
           serviceWorkerParam: { scope: window.ONESIGNAL_SW_SCOPE },
-          serviceWorkerPath: "OneSignalSDKWorker.js",
+          serviceWorkerPath: env.serviceWorkerPath,
         });
         log("Initialized");
         refresh();
