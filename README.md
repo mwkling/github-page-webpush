@@ -25,6 +25,11 @@ staging. The SDK repo's `build:staging` target produces a separate bundle, prefi
 | staging    | `staging.onesignal.com/sdks/web/v16/Staging-OneSignalSDK.page.js` | `OneSignalSDKWorker.staging.js` | `https://staging.onesignal.com/api/v1` |
 | production | `cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js`             | `OneSignalSDKWorker.js`         | `https://api.onesignal.com`         |
 
+The dashboard app is a Typical Site integration, whose server config pins the worker to the site
+root. `init()` therefore passes `serviceWorkerOverrideForTypical: true` along with `path`,
+`serviceWorkerPath`, and `serviceWorkerParam.scope`; without the override flag the SDK ignores those
+and tries to register `https://mwkling.github.io/OneSignalSDKWorker.js`, which 404s.
+
 Each environment has its own worker file because the SDK appends `?appId=…&sdkVersion=…` to the
 worker URL itself, so the environment cannot be passed as a query parameter. Switching environments
 on the same origin re-registers the worker with the other script. Clear site data in DevTools if

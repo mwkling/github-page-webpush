@@ -113,8 +113,11 @@
         log("Initializing OneSignal", { env: envName, appId, scope: window.ONESIGNAL_SW_SCOPE, worker: env.serviceWorkerPath });
         await OneSignal.init({
           appId,
-          serviceWorkerParam: { scope: window.ONESIGNAL_SW_SCOPE },
+          // Typical Site integration ignores worker settings from code unless this is set.
+          serviceWorkerOverrideForTypical: true,
+          path: window.ONESIGNAL_SW_SCOPE,
           serviceWorkerPath: env.serviceWorkerPath,
+          serviceWorkerParam: { scope: window.ONESIGNAL_SW_SCOPE },
         });
         log("Initialized");
         refresh();
