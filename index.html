@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OneSignal Web Push Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { font-size: 1.5rem; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+    dt { color: #666; }
+    dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+    button, input { font: inherit; padding: 0.4rem 0.7rem; margin: 0.2rem 0.2rem 0.2rem 0; }
+    #log { background: #111; color: #ddd; font-family: ui-monospace, monospace; font-size: 0.8rem;
+           padding: 0.75rem; border-radius: 6px; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+    .warn { background: #fff4e5; border-color: #f0b000; }
+  </style>
+</head>
+<body>
+  <h1>OneSignal Web Push Test</h1>
+  <p>Placeholder site for testing the OneSignal Web SDK (v16) on GitHub Pages.</p>
+
+  <section id="config-warning" class="warn" hidden>
+    <strong>No App ID configured.</strong> Edit <code>config.js</code> or append <code>?appId=&lt;your-app-id&gt;</code> to the URL.
+  </section>
+
+  <section>
+    <h2>State</h2>
+    <dl>
+      <dt>App ID</dt><dd id="app-id">-</dd>
+      <dt>Permission</dt><dd id="permission">-</dd>
+      <dt>Opted in</dt><dd id="opted-in">-</dd>
+      <dt>Subscription ID</dt><dd id="sub-id">-</dd>
+      <dt>Push token</dt><dd id="token">-</dd>
+      <dt>OneSignal ID</dt><dd id="onesignal-id">-</dd>
+      <dt>External ID</dt><dd id="external-id">-</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>Push</h2>
+    <button id="btn-prompt">Request permission (native)</button>
+    <button id="btn-slidedown">Show slidedown prompt</button>
+    <button id="btn-optin">Opt in</button>
+    <button id="btn-optout">Opt out</button>
+  </section>
+
+  <section>
+    <h2>User</h2>
+    <input id="external-id-input" placeholder="external id">
+    <button id="btn-login">Login</button>
+    <button id="btn-logout">Logout</button>
+    <br>
+    <input id="tag-key" placeholder="tag key">
+    <input id="tag-value" placeholder="tag value">
+    <button id="btn-tag">Add tag</button>
+  </section>
+
+  <section>
+    <h2>Log</h2>
+    <button id="btn-clear">Clear</button>
+    <div id="log"></div>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const log = (...args) => {
+      const line = `[${new Date().toISOString().slice(11, 19)}] ` +
+        args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+      $("log").textContent += line + "\n";
+      $("log").scrollTop = $("log").scrollHeight;
+      console.log(...args);
+    };
+
+    const params = new URLSearchParams(location.search);
+    const appId = params.get("appId") || window.ONESIGNAL_APP_ID;
+    const configured = appId && !appId.startsWith("REPLACE_");
+    $("app-id").textContent = configured ? appId : "(not set)";
+    $("config-warning").hidden = !!configured;
+
+    function refresh() {
+      const os = window.OneSignal;
+      $("permission").textContent = os.Notifications.permission ? "granted" : Notification.permission;
+      $("opted-in").textContent = String(os.User.PushSubscription.optedIn);
+      $("sub-id").textContent = os.User.PushSubscription.id || "-";
+      $("token").textContent = os.User.PushSubscription.token || "-";
+      $("onesignal-id").textContent = os.User.onesignalId || "-";
+      $("external-id").textContent = os.User.externalId || "-";
+    }
+
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    if (configured) {
+      OneSignalDeferred.push(async (OneSignal) => {
+        log("Initializing OneSignal", { appId, scope: window.ONESIGNAL_SW_SCOPE });
+        await OneSignal.init({
+          appId,
+          serviceWorkerParam: { scope: window.ONESIGNAL_SW_SCOPE },
+          serviceWorkerPath: "OneSignalSDKWorker.js",
+        });
+        log("Initialized");
+        refresh();
+
+        OneSignal.Notifications.addEventListener("permissionChange", (p) => { log("permissionChange", p); refresh(); });
+        OneSignal.User.PushSubscription.addEventListener("change", (e) => { log("subscription change", e); refresh(); });
+        OneSignal.User.addEventListener("change", (e) => { log("user change", e); refresh(); });
+        OneSignal.Notifications.addEventListener("foregroundWillDisplay", (e) => log("foregroundWillDisplay", e.notification));
+        OneSignal.Notifications.addEventListener("click", (e) => log("notification click", e.notification));
+
+        const call = (label, fn) => async () => {
+          try { log(label); await fn(OneSignal); log(label + " done"); }
+          catch (err) { log(label + " failed:", err.message || String(err)); }
+          refresh();
+        };
+        $("btn-prompt").onclick = call("requestPermission", os => os.Notifications.requestPermission());
+        $("btn-slidedown").onclick = call("promptPush", os => os.Slidedown.promptPush({ force: true }));
+        $("btn-optin").onclick = call("optIn", os => os.User.PushSubscription.optIn());
+        $("btn-optout").onclick = call("optOut", os => os.User.PushSubscription.optOut());
+        $("btn-login").onclick = call("login", os => os.login($("external-id-input").value.trim()));
+        $("btn-logout").onclick = call("logout", os => os.logout());
+        $("btn-tag").onclick = call("addTag", os => os.User.addTag($("tag-key").value.trim(), $("tag-value").value.trim()));
+      });
+    } else {
+      log("App ID not configured; OneSignal not initialized.");
+    }
+    $("btn-clear").onclick = () => { $("log").textContent = ""; };
+  </script>
+</body>
+</html>
