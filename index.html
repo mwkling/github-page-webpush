@@ -47,6 +47,7 @@
     <button id="btn-slidedown">Show slidedown prompt</button>
     <button id="btn-optin">Opt in</button>
     <button id="btn-optout">Opt out</button>
+    <button id="btn-local">Show local test notification</button>
   </section>
 
   <section>
@@ -139,6 +140,12 @@
         $("btn-optout").onclick = call("optOut", os => os.User.PushSubscription.optOut());
         $("btn-login").onclick = call("login", os => os.login($("external-id-input").value.trim()));
         $("btn-logout").onclick = call("logout", os => os.logout());
+        $("btn-local").onclick = call("local showNotification", async () => {
+          const reg = await navigator.serviceWorker.getRegistration(window.ONESIGNAL_SW_SCOPE);
+          if (!reg) throw new Error("no service worker registration at " + window.ONESIGNAL_SW_SCOPE);
+          if (Notification.permission !== "granted") throw new Error("permission is " + Notification.permission);
+          await reg.showNotification("Local test", { body: "Shown by the page via the SW, bypassing OneSignal", tag: "local-test" });
+        });
         $("btn-tag").onclick = call("addTag", os => os.User.addTag($("tag-key").value.trim(), $("tag-value").value.trim()));
       });
     } else {
